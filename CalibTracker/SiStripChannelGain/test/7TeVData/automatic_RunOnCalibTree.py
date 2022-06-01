@@ -24,15 +24,29 @@ def numberOfEvents(file,mode):
    return NEntries	
 
 
-PCLDATASET = "/StreamExpress/Run2017*-PromptCalibProdSiStripGains__AAG__-Express-v*/ALCAPROMPT"
-CALIBTREEPATH = '/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR17__AAG__' #used if usePCL==False
+PCLDATASET = "/StreamExpress/Commissioning2021-PromptCalibProdSiStripGains-Express-v*/ALCAPROMPT"
+CALIBTREEPATH = '/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR21__AAG__' 
+
+#PCLDATASET = '/StreamExpress/Run2022A-SiStripCalMinBiasAAG-Express-v1/ALCARECO' #0
+#PCLDATASET = '/StreamExpress/Run2022A-PromptCalibProdSiStripGainsAAG-Express-v1/ALCAPROMPT' #0
+#PCLDATASET = '/StreamExpress/Run2022A-SiStripCalMinBias-Express-v1/ALCARECO' # 2283K
+#PCLDATASET = '/StreamExpress/Run2022A-PromptCalibProdSiStripGains-Express-v1/ALCAPROMPT' # 2283 K
+
+skip_small_files = False
+calibtree_minfilesize = 10 # MB
+run_minevents = 3
+skip_low_runs = True
+
+
+#runValidation = 273555
+# runsToVeto = [272935, 273290, 273294, 273295, 273296, 273531,
+#               273537, 273526, 273523, 273514, 273589,  # Low PU
+#               273588, 273586, 273581, 273580, 273579, 273522, 273521, 273520, 273512, 273511, 273510, 273509,  #VDM
+#               275326, 275656, 276764, 275765, 275769, 275783, 275825, 275829, 275838
+# ]
 
 runValidation = 273555
-runsToVeto = [272935, 273290, 273294, 273295, 273296, 273531,
-              273537, 273526, 273523, 273514, 273589,  # Low PU
-              273588, 273586, 273581, 273580, 273579, 273522, 273521, 273520, 273512, 273511, 273510, 273509,  #VDM
-              275326, 275656, 276764, 275765, 275769, 275783, 275825, 275829, 275838
-]
+runsToVeto = []
 
 #read arguments to the command line
 #configure
@@ -97,14 +111,15 @@ NTotalEvents = 0;
 run = 0
 FileList = ""
 
-dataCertInfo = dataCert.get()
-print("Loaded certification info. Last update : %s"%dataCertInfo["Last update"]) 
+#dataCertInfo = dataCert.get()
+#print("Loaded certification info. Last update : %s"%dataCertInfo["Last update"]) 
 
 lastGoodRun = -1
 if(usePCL==True):
    print("Get the list of PCL output files from DAS")
-   print(initEnv+"das_client.py  --limit=9999 --query='dataset=%s'"%PCLDATASET)
-   dasOutput = commands.getstatusoutput(initEnv+"das_client.py  --limit=9999 --query='dataset=%s'"%PCLDATASET)[1]
+   print(initEnv+"dasgoclient  --limit=9999 --query='dataset=%s'"%PCLDATASET)
+   print(PCLDATASET)
+   dasOutput = commands.getstatusoutput(initEnv+"dasgoclient  --limit=9999 --query='dataset=%s'"%PCLDATASET)[1]
    datasets = [ line for line in dasOutput.splitlines()
                 if not line.startswith('Showing') and 'SCRAM fatal' not in line and len(line)>0 ]
    print(datasets)
@@ -118,7 +133,7 @@ if(usePCL==True):
    runs = []
    for dataset in datasets:
        runs += [ (dataset, line) for line in commands.getstatusoutput(initEnv+
-                                         "das_client.py  --limit=9999 --query='run dataset=%s'"%dataset)[1].splitlines()
+                                         "dasgoclient  --limit=9999 --query='run dataset=%s'"%dataset)[1].splitlines()
                       if not line.startswith('Showing') and 'SCRAM fatal' not in line and len(line)>0 ]
    if len( runs )==0 or 'Error' in " ".join(datasets):
        print("Issues in gathering the run numbers, please check the command and the query")
@@ -129,31 +144,27 @@ if(usePCL==True):
       run  = int(run_number)
       if(run<firstRun or run in runsToVeto):continue
       if(lastRun>0 and run>lastRun):continue      
-      if not dataCert.checkRun(run,dataCertInfo):
-         print("Skipping...")
-         continue
+      # if not dataCert.checkRun(run,dataCertInfo):
+      #    print("Skipping...")
+      #    continue
       lastGoodRun = run
       sys.stdout.write( 'Gathering infos for RUN %i:  ' % run )
 
       #check the events available for this run
-      NEventsDasOut = [ line for line in commands.getstatusoutput(initEnv+
-       "das_client.py  --limit=9999 --query='summary dataset=%s run=%i | grep summary.nevents'"%(dataset,run))[1].splitlines()
-                        if not line.startswith('Showing') and 'SCRAM fatal' not in line and len(line)>0 ][-1]
-      if(not NEventsDasOut.isdigit() ):
-         print ("cannot retrieve the number of events from das, SKIPPING")
-         #print NEventsDasOut
-         continue
+      NEventsDasOut = commands.getstatusoutput(initEnv+"dasgoclient  --limit=9999 --query='summary dataset=%s run=%i | grep summary.nevents'"%(dataset,run))[1]
 
-      if(FileList==""):firstRun=run;
-      NEvents = int(NEventsDasOut)
+      if(FileList==""): 
+         firstRun=run;
+         NEvents = int(NEventsDasOut)
 
       if(NEvents<=minNEvents):
-         print ("only %i events in this run, SKIPPING" % NEvents)
-         continue
+         if skip_low_runs:
+            print ("only %i events in this run, SKIPPING" % NEvents)
+            continue
 
       FileList+="#run=" + str(run) + " -->  NEvents="+str(NEvents/1000).rjust(8)+"K\n"
       resultsFiles = [ line for line in commands.getstatusoutput(initEnv+
-                       "das_client.py  --limit=9999 --query='file dataset=%s run=%i'"%(dataset,run))[1].splitlines()
+                       "dasgoclient  --limit=9999 --query='file dataset=%s run=%i'"%(dataset,run))[1].splitlines()
                        if not line.startswith('Showing') and 'SCRAM fatal' not in line and len(line)>0 ]
       if len(resultsFiles)==0 or 'Error' in " ".join(resultsFiles):
          print ("cannot retrieve the list of files from das, SKIPPING")
@@ -169,88 +180,134 @@ if(usePCL==True):
 else:
    print("Get the list of calibTree from castor (eos ls " + CALIBTREEPATH + ")")
    calibTreeInfo = commands.getstatusoutput("eos ls -l "+CALIBTREEPATH)[1].split('\n');
-   print(calibTreeInfo)
    # collect the list of runs and file size
+   # Example of an element in the calibTreeInfo array:
+   # ['-rw-r--r--', '2', 'delcourt', 'zh', '432541631', 'Apr', '27', '2018', 'calibTree_315252.root']
    # calibTreeInfo.split()[8] - file name
    # calibTreeInfo.split()[4] - file size
    info_list = [(i.split()[8],
                  int( i.split()[8].replace("calibTree_","").replace(".root","").split('_')[0] ),
-                 int( i.split()[4] )/1048576 ) for i in calibTreeInfo]
-   info_list.sort( key=lambda tup: tup[1] )
+                 int( i.split()[4] )/1048576 ) for i in calibTreeInfo] # To get filesize in MB
+   # Example of an element of info_list:
+   # ('calibTree_315252_25.root', 315252, 396)
+   info_list.sort( key=lambda tup: tup[1] ) # Sort on the Run number
 
    print("Check the number of events available")
    for info in info_list:
       if(len(info)<1):continue;
       size = info[2]
-      if(size < 10): continue	#skip file<10MB
+      if(size < calibtree_minfilesize):
+         if skip_small_files:
+            print("File size less than 10 MB, skipping...")
+            continue
       run = info[1]
       if(run<firstRun or run in runsToVeto):continue
       if(lastRun>0 and run>lastRun):continue
-      if not dataCert.checkRun(run,dataCertInfo):
+      # if not dataCert.checkRun(run,dataCertInfo):
+      #    print("Skipping...")
+      #    continue
+      if run<295310: # Never accept runs < 295310 ?
          print("Skipping...")
          continue
-      if run<295310:
-         print("Skipping...")
-         continue
+      
       lastGoodRun = run
-      NEvents = numberOfEvents("root://eoscms//eos/cms"+CALIBTREEPATH+'/'+info[0],calMode);	
-      if(NEvents<=3000):continue #only keep runs with at least 3K events
-      if(FileList==""):firstRun=run;
+      
+      # Get the number of events from the GainCalibrationTree in the rootfile:
+      NEvents = numberOfEvents("root://eoscms//eos/cms"+CALIBTREEPATH+'/'+info[0],calMode);
+      
+      if(NEvents<=run_minevents):
+         if skip_low_runs: # only keep runs with at least 3K events
+            print("Less than 3000 events, skipping...")
+            continue 
+      
+      if(FileList==""): # If this is the first file to be added to the FileList:
+         firstRun=run
+      # The file names will be added to the FileList_cfg file -> The correct strings are constructed here:
       FileList += 'calibTreeList.extend(["root://eoscms//eos/cms'+CALIBTREEPATH+'/'+info[0]+'"]) #' + str(size).rjust(6)+'MB  NEvents='+str(NEvents/1000).rjust(8)+'K\n'
       NTotalEvents += NEvents;
       print("Current number of events to process is " + str(NTotalEvents))
-      if(automatic==True and NTotalEvents >= maxNEvents):break;
+      if(automatic==True and NTotalEvents >= maxNEvents):break; # Exit loop if number of requested events has been reached.
 
+# If none of the runs fulfill the requirements above:
 if lastGoodRun < 0:
    print("No good run to process.")
    sys.exit()
-if(lastRun<=0):lastRun = lastGoodRun
+
+# Get the last run number that was added to the file list:
+if(lastRun<=0):lastRun = lastGoodRun 
 
 print("RunRange=[" + str(firstRun) + "," + str(lastRun) + "] --> NEvents=" + str(NTotalEvents/1000)+"K")
 
-if(automatic==True and NTotalEvents<2e6):	#ask at least 2M events to perform the calibration
+# Ask at least 2M events to perform the calibration:
+if(automatic==True and NTotalEvents<2e6):
 	print('Not Enough events to run the calibration')
-        os.system('echo "Gain calibration postponed" | mail -s "Gain calibration postponed ('+str(firstRun)+' to '+str(lastRun)+') NEvents=' + str(NTotalEvents/1000)+'K" ' + mail)
-	exit(0);
+        #os.system('echo "Gain calibration postponed" | mail -s "Gain calibration postponed ('+str(firstRun)+' to '+str(lastRun)+') NEvents=' + str(NTotalEvents/1000)+'K" ' + mail)
+        answer = raw_input('Proceed anyway? (y/n)')
+        if answer == 'n':
+	   exit(0);
 
-name = "Run_"+str(firstRun)+"_to_"+str(lastRun)
-if len(calMode)>0:  name = name+"_"+calMode
-if(usePCL==True):   name = name+"_PCL"
-else:               name = name+"_CalibTree"
-print(name)
+makedirectory = True
+if makedirectory:
+   # Generate a name for the creation of a new directory:
+   name = "Run_"+str(firstRun)+"_to_"+str(lastRun)
+   if len(calMode)>0:  name = name+"_"+calMode
+   if(usePCL==True):   name = name+"_PCL"
+   else:               name = name+"_CalibTree"
+   print(name)
 
-oldDirectory = "7TeVData"
-newDirectory = "Data_"+name;
-os.system("mkdir -p " + newDirectory);
-os.system("cp " + oldDirectory + "/* " + newDirectory+"/.");
-file = open(newDirectory+"/FileList_cfg.py", "w")
-file.write("import FWCore.ParameterSet.Config as cms\n")
-file.write("calibTreeList = cms.untracked.vstring()\n")
-file.write("#TotalNumberOfEvent considered is %i\n" % NTotalEvents)
-file.write(FileList)
-file.close()
-os.system("cat " + newDirectory + "/FileList_cfg.py")
-os.system("sed -i 's|XXX_FIRSTRUN_XXX|"+str(firstRun)+"|g' "+newDirectory+"/*_cfg.py")
-os.system("sed -i 's|XXX_LASTRUN_XXX|"+str(lastRun)+"|g' "+newDirectory+"/*_cfg.py")
-os.system("sed -i 's|XXX_GT_XXX|"+globaltag+"|g' "+newDirectory+"/*_cfg.py")
-os.system("sed -i 's|XXX_PCL_XXX|"+str(usePCL)+"|g' "+newDirectory+"/*_cfg.py")
-os.system("sed -i 's|XXX_CALMODE_XXX|"+calMode+"|g' "+newDirectory+"/*_cfg.py")
-os.system("sed -i 's|XXX_DQMDIR_XXX|"+DQM_dir+"|g' "+newDirectory+"/*_cfg.py")
-os.chdir(newDirectory);
+   # Create new directory and copy over everything from this (7TeVData) directory:
+   oldDirectory = "7TeVData"
+   newDirectory = "Data_"+name;
+   os.system("mkdir -p " + newDirectory);
+   os.system("cp " + oldDirectory + "/* " + newDirectory+"/.");
 
-job = initEnv
-job+= "\ncd %s; \npwd; \nls; \npython submitJob.py -f %s -l %s -p %s -P %s"%(os.getcwd(),firstRun,lastRun,usePCL,publish)
-job+= " -m %s -s %s -a %s"%(calMode,scriptDir,automatic)
+   # Open FileList_cfg.py in the new directory and add the files that were gathered above:
+   file = open(newDirectory+"/FileList_cfg.py", "w")
+   file.write("import FWCore.ParameterSet.Config as cms\n")
+   file.write("calibTreeList = cms.untracked.vstring()\n")
+   file.write("#TotalNumberOfEvent considered is %i\n" % NTotalEvents)
+   file.write(FileList)
+   file.close()
 
-print("*** JOB : ***")
-print(job)
-print("cwd = %s"%(os.getcwd()))
-with open("job.sh","w") as f:
-   f.write(job)
-os.system("chmod +x job.sh")
-submitCMD =  'bsub  -q 2nd -J G2prod -R "type == SLC6_64 && pool > 30000" "job.sh"'
-print(submitCMD)
-os.system(submitCMD)
+   # Fill in the templates in Validation_Compute_cfg.py and Gains_Compute_cfg.py:
+   os.system("cat " + newDirectory + "/FileList_cfg.py")
+   os.system("sed -i 's|XXX_FIRSTRUN_XXX|"+str(firstRun)+"|g' "+newDirectory+"/*_cfg.py")
+   os.system("sed -i 's|XXX_LASTRUN_XXX|"+str(lastRun)+"|g' "+newDirectory+"/*_cfg.py")
+   os.system("sed -i 's|XXX_GT_XXX|"+globaltag+"|g' "+newDirectory+"/*_cfg.py")
+   os.system("sed -i 's|XXX_PCL_XXX|"+str(usePCL)+"|g' "+newDirectory+"/*_cfg.py")
+   os.system("sed -i 's|XXX_CALMODE_XXX|"+calMode+"|g' "+newDirectory+"/*_cfg.py")
+   os.system("sed -i 's|XXX_DQMDIR_XXX|"+DQM_dir+"|g' "+newDirectory+"/*_cfg.py")
+
+   # Move to newly created directory:
+   os.chdir(newDirectory);
+
+   # Now a job will be made to be submitted:
+   job = initEnv
+   job+= "\ncd %s; \npwd; \nls; \npython submitJob.py -f %s -l %s -p %s -P %s"%(os.getcwd(),firstRun,lastRun,usePCL,publish)
+   job+= " -m %s -s %s -a %s"%(calMode,scriptDir,automatic)
+   # The job.sh script will contain the following lines:
+   # 
+   #   cd /afs/cern.ch/user/n/nbreugel/private/CMSSW_10_6_28/src/CalibTracker/SiStripChannelGain/test/7TeVData;
+   #   source /afs/cern.ch/cms/cmsset_default.sh;
+   #   eval `scramv1 runtime -sh`;
+   # 
+   #   cd /afs/cern.ch/user/n/nbreugel/private/CMSSW_10_6_28/src/CalibTracker/SiStripChannelGain/test/7TeVData;
+   #   pwd;
+   #   ls;
+   #   python submitJob.py -f firstRun -l lastRun -p usePCL -P publish -m calMode -s scriptDir -a automatic
+   #
+
+   print("*** JOB : ***")
+   print(job)
+   print("cwd = %s"%(os.getcwd()))
+   with open("job.sh","w") as f:
+      f.write(job)
+   os.system("chmod +x job.sh")
+   submitCMD =  'bsub  -q 2nd -J G2prod -R "type == SLC6_64 && pool > 30000" "job.sh"'
+   print(submitCMD)
+   # os.system(submitCMD)
+
+
 
 #if(os.system("sh sequence.sh \"" + name + "\" \"" + calMode + "\" \"CMS Preliminary  -  Run " + str(firstRun) + " to " + str(lastRun) + "\"")!=0):
 #	os.system('echo "Gain calibration failed" | mail -s "Gain calibration failed ('+name+')" ' + mail)        
