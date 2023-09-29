@@ -4,7 +4,7 @@ import urllib
 import string
 import os
 import sys
-import commands
+import subprocess
 import time
 import optparse
 import submitCalibTree.Config
@@ -13,8 +13,9 @@ import submitCalibTree.launchJobs
 mailAdd = ""
 start = time.strftime("%D %H:%M")
 
-def mail(STDruns,AAGruns,cleanUpLog):
-   if mailAdd=="":
+
+def mail(STDruns, AAGruns, cleanUpLog):
+   if mailAdd == "":
       print("No email address specified.")
       return
 
