@@ -73,6 +73,8 @@ class configuration:
       # Check castor path exists
       cmd = self.eosLs.replace("-lrth","")+self.CASTORDIR
       # cmd = cmd[:-2]+"*" eos ls does not support wildcards! gives error
+	  dir_name = self.CASTORDIR.split("/")[-1]
+	  cmd = cmd[:-len(dir_name)]
       (status,output) = subprocess.getstatusoutput(cmd)
       if status or not self.CASTORDIR.split("/")[-1] in output:
          print(cmd)
