@@ -70,9 +70,9 @@ class configuration:
          print("RUN dir does not exist.")
          goodConfig = False
 
-      #Check castor path exists FIXME
+      # Check castor path exists
       cmd = self.eosLs.replace("-lrth","")+self.CASTORDIR
-      cmd = cmd[:-2]+"*"
+      # cmd = cmd[:-2]+"*" eos ls does not support wildcards! gives error
       (status,output) = subprocess.getstatusoutput(cmd)
       if status or not self.CASTORDIR.split("/")[-1] in output:
          print(cmd)
