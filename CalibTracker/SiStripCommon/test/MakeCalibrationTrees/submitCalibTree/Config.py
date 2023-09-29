@@ -4,7 +4,7 @@ import os, commands,time,sys
 
 class configuration:
    datasetPat  = '/StreamExpress/Run2018*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
-   CMSSWDIR    = 'TO_FILL_IN'
+   CMSSWDIR    = os.environ["CMSSW_BASE"] + "/src/"
    RUNDIR      = CMSSWDIR+'CalibTracker/SiStripCommon/test/MakeCalibrationTrees/'
    CASTORDIR   = '/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR18__AAG__'
    nFilesPerJob= 25
