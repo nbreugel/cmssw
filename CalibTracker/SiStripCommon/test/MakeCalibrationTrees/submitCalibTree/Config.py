@@ -1,10 +1,10 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 from __future__ import print_function
-import os, time,sys
+import os,subprocess,time,sys
 
 class configuration:
    datasetPat  = '/StreamExpress/Run2018*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
-   CMSSWDIR    = 'TO_FILL_IN'
+   CMSSWDIR    = os.environ["CMSSW_BASE"] + "/src/"
    RUNDIR      = CMSSWDIR+'CalibTracker/SiStripCommon/test/MakeCalibrationTrees/'
    CASTORDIR   = '/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR18__AAG__'
    nFilesPerJob= 25
@@ -70,9 +70,11 @@ class configuration:
          print("RUN dir does not exist.")
          goodConfig = False
 
-      #Check castor path exists FIXME
+# Check castor path exists
       cmd = self.eosLs.replace("-lrth","")+self.CASTORDIR
-      cmd = cmd[:-2]+"*"
+      # cmd = cmd[:-2]+"*" eos ls does not support wildcards! gives error
+      dir_name = self.CASTORDIR.split("/")[-1]
+      cmd = cmd[:-len(dir_name)]
       (status,output) = subprocess.getstatusoutput(cmd)
       if status or not self.CASTORDIR.split("/")[-1] in output:
          print(cmd)
