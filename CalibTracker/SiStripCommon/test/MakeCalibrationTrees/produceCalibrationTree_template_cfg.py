@@ -83,7 +83,8 @@ process.load('Configuration.Geometry.GeometryRecoDB_cff')
 process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
 process.load('CalibTracker.SiStripCommon.ShallowEventDataProducer_cfi') #event Info
 
-
+process.anEff.useAllHitsFromTracksWithMissingHits = cms.untracked.bool(True)
+process.anEff.doMissingHitsRecovery = cms.untracked.bool(True)
 
 from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, options.conditionGT, options.conditionOverwrite)
