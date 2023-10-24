@@ -1,110 +1,151 @@
-#!/usr/bin/env python
-from __future__ import print_function
-import os,subprocess,time,sys
+#!/usr/bin/env python3
+import os
+import subprocess
+import time
 
-class configuration:
-   datasetPat  = '/StreamExpress/Run2018*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
-   CMSSWDIR    = os.environ["CMSSW_BASE"] + "/src/"
-   RUNDIR      = CMSSWDIR+'CalibTracker/SiStripCommon/test/MakeCalibrationTrees/'
-   CASTORDIR   = '/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR18__AAG__'
-   nFilesPerJob= 25
-   collection  = "ALCARECOSiStripCalMinBias__AAG__"
-   globalTag   = "TO_UPDATE"
-   initEnv     = ""
-   dasClient   = "dasgoclient"
-   eosLs       = "eos ls "
-   def  __init__(self,AAG=False,debug=False):
-      self.relaunchList= []
-      self.firstRun    = -1
-      self.lastRun     = 999999
-      self.launchedRuns = []
-      self.AAG          = AAG
-      self.datasetPat   = self.datasetPat.replace("__AAG__","AAG" if self.AAG else "")
-      self.CASTORDIR    = self.CASTORDIR.replace ("__AAG__","_Aag" if self.AAG else "")
-      self.collection   = self.collection.replace("__AAG__","AAG" if self.AAG else "")
-      self.initEnv+='cd ' + self.CMSSWDIR + '; '
-      self.initEnv+='export CMS_PATH=/cvmfs/cms.cern.ch; '
-      self.initEnv+='source /afs/cern.ch/cms/cmsset_default.sh' + ';'
-      self.initEnv+='eval `scramv1 runtime -sh`' + ';'
 
-      proxyFile = "/afs/cern.ch/user/%s/%s/private/x509up_u%s"%(os.environ["USER"][0],os.environ["USER"],os.geteuid())
-      if not os.path.isfile(proxyFile):
-        print("WARNING : No private proxy file to use. Can't run on data outside of CERN")
-      else:
-        T = (time.time()-os.stat(proxyFile).st_mtime)
-        print("proxy file created %sh and %s min ago"%(int(T)/3600, int(T)/60- 60*(int(T)/3600)))
-        if T < 36000:
-          # Proxy valid for 12hours --> Ignore files created more than 10h ago"
-          self.initEnv+='export X509_USER_PROXY=%s ;'%proxyFile
+class Configuration:
+    # Variables to be edited by user:
+    dataset_path         = '/StreamExpress/Run2023F-SiStripCalMinBias__AAG__-Express-v1/ALCARECO'
+    CASTOR_dir           = '/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR18__AAG__'
+    first_run            = 373710 
+    last_run             = 373710
+    collection           = "ALCARECOSiStripCalMinBias__AAG__"
+    global_tag           = "130X_dataRun3_Express_v2"
+    mail_address          = "nordin.breugelmans@cern.ch"
+
+    # Optional variables:
+    n_files_per_job      = 25
+    CMSSW_dir            = ''
+
+    # Could break script if modified:
+    das_client_command   = "dasgoclient "
+    eos_ls_command       = "eos ls "
+    proxy_file_path      = "/afs/cern.ch/user/%s/%s/x509up_u%s" % (os.environ["USER"][0],
+                                                                   os.environ["USER"],
+                                                                   os.geteuid())
+    init_env_command     = ""
+    working_dir          = ''
+    
+    relaunch_runs_list = []
+    launched_runs_list = []
+
+    def __init__(self, use_AAG = False, debug_mode = False):
+        self.use_AAG      = use_AAG
+        self.debug_mode   = debug_mode
+        
+        self.CASTOR_dir   = self.CASTOR_dir.replace("__AAG__", "_Aag" if self.use_AAG else "")
+        self.dataset_path = self.dataset_path.replace("__AAG__", "_Aag" if self.use_AAG else "")
+        self.collection   = self.collection.replace("__AAG__", "AAG" if self.use_AAG else "")
+        
+        self.integrity    = self.checkIntegrity()
+        self.condor_dir   = self.working_dir + "/condor_submission__AAG__".replace("__AAG__", "_AAG" if self.use_AAG else "")
+
+        self.checkProxy()
+        self.init_env_command += "cd " + self.CMSSW_dir + ";"
+        self.init_env_command += "eval `scram runtime -sh`;"
+        if self.proxy_file_path != '':
+            self.init_env_command += "export X509_USER_PROXY=%s;" % self.proxy_file_path
+        self.init_env_command += "cd - >/dev/null;"
+
+    def checkIntegrity(self):
+        config_is_good = True
+        
+        # Check if dataset path makes sense:
+        split_dataset_path = self.dataset_path.split("/")
+        if not len(split_dataset_path) == 4:
+            config_is_good = False
+            self.printWarning("Expected four slashes (/) in dataset path.")
+        if not split_dataset_path[0] == '':
+            config_is_good = False
+            self.printWarning("Expected no characters before first slash (/).")
+        if (not len(split_dataset_path[1]) > 0
+            or not len(split_dataset_path[2]) > 0
+            or not len(split_dataset_path[3]) > 0):
+            config_is_good = False
+            self.printWarning("Expected text between slashes (/).")
+        if os.path.isdir(self.dataset_path):
+            config_is_good = False
+            self.printWarning("Dataset path cannot be an existing directory.")
+
+        # Check if CMSSW path makes sense:
+        if self.CMSSW_dir == '' or not os.path.isdir(self.CMSSW_dir):
+            self.printDebug("CMSSW directory was not found. Directory will be set based on content of CMSSW_BASE variable.")
+            if not "CMSSW_BASE" in os.environ:
+                self.printWarning("CMSSW_BASE variable has not been set. Are you in a CMSSW environment?")
+                config_is_good = False
+            else:
+                self.CMSSW_dir = os.environ["CMSSW_BASE"] + "/src"
+
+        # Check if CASTOR path exists:
+        dir_name = self.CASTOR_dir.split("/")[-1]
+        command = self.eos_ls_command + self.CASTOR_dir[:-len(dir_name)]
+        (status, output) = subprocess.getstatusoutput(command)
+        if status or not dir_name in output:
+            self.printWarning("CASTOR directory '%s' does not exist." % dir_name)
+            self.printDebug("Command used: " + command)
+            self.printDebug(output)
+            config_is_good = False
+
+        # Check if working dir makes sense:
+        if self.working_dir == '' or os.path.isdir(self.working_dir):
+            self.printDebug("Working directory not found/specified. Setting it to directory this script is run from.")
+            self.working_dir = os.path.abspath(".")
+
+        # Check if global tag is filled:
+        if self.global_tag == "":
+            self.printWarning("The global tag was not specified.")
+            config_is_good = False
+
+        return config_is_good
+
+    def checkProxy(self):
+        proxy_is_good = False
+                
+        if not os.path.isfile(self.proxy_file_path):
+            self.printWarning("No private proxy file to use. Can't run on data outside of CERN.")
         else:
-          print("WARNING : proxy file expired. Can't run on data outside of CERN")
+            proxy_age   = int(time.time() - os.stat(self.proxy_file_path).st_mtime)
+            proxy_age_h = int(proxy_age/3600)
+            proxy_age_m = int(proxy_age/60) - 60*(int(proxy_age/3600))
+            if proxy_age < 36000:
+                # Proxy valid for 12hours --> Ignore files created more than 10h ago"
+                proxy_is_good = True
+            elif proxy_age >= 36000:
+                self.printWarning("Proxy was created %ih and %i min ago." % (proxy_age_h,
+                                                                           proxy_age_m))
+                self.printWarning("Please refresh your proxy")
+            elif proxy_age < 36000 and self.debug_mode:
+                self.printDebug("Proxy was created %ih and %i min ago." % (proxy_age_h,
+                                                                         proxy_age_m))
 
-      self.initEnv+='cd -;'
-      self.submit = not debug
-      self.integrity = False
-      self.setupEnviron()
-      print("Integrity = %s"%self.checkIntegrity())
+    def __str__(self):
+        description  = "    First run       = %s\n" % self.first_run
+        description += "    Last run        = %s\n" % self.last_run
+        description += "    Use AAG         = %s\n" % self.use_AAG
+        description += "    Dataset         = %s\n" % self.dataset_path
+        description += "    Collection      = %s\n" % self.collection
+        description += "    Global tag      = %s\n" % self.global_tag
+        description += "    Proxy file path = %s\n" % self.proxy_file_path
+        description += "    CMSSW           = %s\n" % self.CMSSW_dir
+        description += "    CASTOR          = %s\n" % self.CASTOR_dir
+        description += "    Working dir     = %s\n" % self.working_dir
+        description += "    Files per job   = %s\n" % self.n_files_per_job
+        description += "    Debug mode      = %s  " % ("True" if self.debug_mode else "False")
+        return description
 
-   def checkIntegrity(self):
-      goodConfig=True
+    def printWarning(self, message):
+        print("\033[91m" + "CONFIG WARNING: " + message + "\033[0m")
 
-      #Check dataset :
-      d = self.datasetPat.split("/")
-      if not len(d) == 4:
-         print("Bad dataset. Expecting 4 '/'")
-         goodConfig=False
-      if not d[0]=='':
-         print("Bad dataset. Expecting nothing before first '/'")
-         goodConfig=False
-      if not len(d[1])>0 or not len(d[2]) > 0 or not len(d[3]) > 0:
-         print("Bad dataset. Expecting text between '/'")
-         goodConfig=False
-      if os.path.isdir(self.datasetPat):
-         print("Bad dataset. Can't be an existing directory")
-         goodConfig=False
-      #Check all paths exist
-      if not os.path.isdir(self.CMSSWDIR):
-         print("CMSSW dir does not exist.")
-         goodConfig = False
-      if not os.path.isdir(self.RUNDIR):
-         print("RUN dir does not exist.")
-         goodConfig = False
-
-# Check castor path exists
-      cmd = self.eosLs.replace("-lrth","")+self.CASTORDIR
-      # cmd = cmd[:-2]+"*" eos ls does not support wildcards! gives error
-      dir_name = self.CASTORDIR.split("/")[-1]
-      cmd = cmd[:-len(dir_name)]
-      (status,output) = subprocess.getstatusoutput(cmd)
-      if status or not self.CASTORDIR.split("/")[-1] in output:
-         print(cmd)
-         print(output)
-         print("CASTOR dir does not exist.")
-         goodConfig = False
-      self.integrity = goodConfig
-      return goodConfig
-
-   def setupEnviron(self):
-      os.environ['PATH'] = os.getenv('PATH')+':/afs/cern.ch/cms/sw/common/'
-      os.environ['CMS_PATH']='/afs/cern.ch/cms'
-      os.environ['FRONTIER_PROXY'] = 'http://cmst0frontier.cern.ch:3128'
-      os.environ['SCRAM_ARCH']='slc6_amd64_gcc530'
-   def __str__(self):
-      description = "Configuration :\n"
-      description+= "First run  = %s\n"   %self.firstRun
-      description+= "After Abort= %s\n"   %self.AAG
-      description+= "dataset    = %s\n"   %self.datasetPat
-      description+= "CMSSW      = %s\n"   %self.CMSSWDIR
-      description+= "RUNDIR     = %s\n"   %self.RUNDIR
-      description+= "CASTOR     = %s\n"   %self.CASTORDIR
-      description+= "nFiles     = %s\n"   %self.nFilesPerJob
-      description+= "collection = %s\n"   %self.collection
-      description+= "initEnv    = %s\n"   %self.initEnv
-      description+= "submit     = %s\n"   %self.submit
-      return description
+    def printDebug(self, message):
+        if self.debug_mode:
+            print("\033[33m" + "CONFIG DEBUG: " + message + "\033[0m")
+           
 
 if __name__ == "__main__":
-   c = configuration(True)
-   print(c)
-
-
+    c = Configuration(False, True)
+    print("")
+    print(c)
+       
+       
+        
