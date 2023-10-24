@@ -26,6 +26,6 @@ The production can be configured by making changes to [submitCalibTree/Config.py
 | `last_run` | Specifies the last run that should be processed. Can use `-1` to indicate running over the full dataset. |
 | `collection` | The collection to be used for the production of CTs, for example `ALCARECOSiStripCalMinBias__AAG__`. |
 | `global_tag` | The global tag which provides the conditions of the data taking, for example `"130X_dataRun3_Express_v2`. |
-| `mail_address` | The mail adress of the user. An email containing the list of runs to be processed will be sent as soon as the production starts. |
+| `mail_address` | (optional) The mail adress of the user. An email containing the list of runs to be processed will be sent as soon as the production starts. |
 | `n_files_per_job` | (optional) Specifies the maximum number of files that can be processed by a single job. Default is 25. |
 | `CMSSW_dir` | (optional) In case another CMSSW environment needs to be used, the path can be provided here. |
