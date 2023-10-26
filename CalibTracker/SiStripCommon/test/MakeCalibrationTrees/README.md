@@ -17,10 +17,10 @@ Optional arguments include:
 - `--verbose`: Verbosity flag: greatly increases the printed output. Useful for debugging e.g. DAS query failures.
 
 ## Configuration
-The production can be configured by making changes to [submitCalibTree/Config.py](./submitCalibTree/Config.py). The variables which can be safely edited are given below:
+The production can be configured by making changes to [submitCalibTree/Config.py](./submitCalibTree/Config.py). When making changes to the variables `dataset_path`, `CASTOR_dir` or `collection`, make sure to use the `__AAG__` placeholder such that the production can run over AAG datasets aswell.
 | Variable      | Description |
 | -----------		 | ----------- |
-| `dataset_path`	 | DAS path to dataset. Can be a pattern with wildcards, for example `/StreamExpress/Run2023*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO`. Make sure the `__AAG__` placeholder is placed correctly to allow the production to run over AAG datasets aswell. |
+| `dataset_path`	 | Path to dataset in Data Aggregation Service (DAS). Can be a pattern with wildcards, for example `/StreamExpress/Run2023*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO`. |
 | `CASTOR_dir`		 | Path to the directory where the produced CTs will be staged, for example `/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR18__AAG__`. CTs produced from AAG datasets would in this case be staged in `GR18_Aag`. These directories need to have been created before the production is launched. |
 | `first_run`		 | Specifies the first run that should be processed. |
 | `last_run`		 | Specifies the last run that should be processed. Can use `-1` to indicate running over the full dataset. |
