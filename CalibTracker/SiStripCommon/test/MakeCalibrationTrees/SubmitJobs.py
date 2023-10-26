@@ -23,6 +23,12 @@ def SubmitJobs(use_AAG = False, use_debug = False):
 
     LastRun_textfile = "LastRun%s.txt" % ("" if not use_AAG else "_Aag")
     FailedRun_textfile = "FailedRun%s.txt" % ("" if not use_AAG else "_Aag")
+
+    if not os.path.isfile(LastRun_textfile):
+        os.system("touch " + LastRun_textfile)
+
+    if not os.path.isfile(FailedRun_textfile):
+        os.system("touch " + FailedRun_textfile)
     
     if not config.integrity:
         print("")
