@@ -10,16 +10,22 @@ import argparse
 parser =argparse.ArgumentParser()
 parser.add_argument("-d", "--dryrun", default=False, action="store_true", help="Dryrun: jobs will not be submitted.")
 parser.add_argument("-v", "--verbose", default=False, action="store_true", help="Verbosity: will print more information in debug mode.")
+parser.add_argument("--skipAAG", default=False, action="store_true", help="Skips running over AAG dataset.")
+parser.add_argument("--skipSTD", default=False, action="store_true", help="Skips running over STD dataset.")
+parser.add_argument("--useRunList", default="", help="Supply file containing list of runs to use.")
 
 args = parser.parse_args()
 
 DEBUG        = args.verbose
 DRYRUN       = args.dryrun
+SKIP_AAG     = args.skipAAG
+SKIP_STD     = args.skipSTD
 START_TIME   = time.strftime("%D %H:%M")
+LIST_OF_RUNS = args.useRunList
 
-def SubmitJobs(use_AAG = False, use_debug = False):
+def SubmitJobs(use_AAG = False, use_debug = False, use_run_list=""):
     print("===> PROCESSING %s BUNCH...\n" % ("STD" if not use_AAG else "AAG"))
-    config = Configuration(debug_mode = use_debug, use_AAG = use_AAG)
+    config = Configuration(debug_mode = use_debug, use_AAG = use_AAG, use_run_list=use_run_list)
 
     LastRun_textfile = "LastRun%s.txt" % ("" if not use_AAG else "_Aag")
     FailedRun_textfile = "FailedRun%s.txt" % ("" if not use_AAG else "_Aag")
@@ -100,8 +106,10 @@ def mail(std_runs, aag_runs, mail_address):
     message += "\n"
     message += "AAG bunch: The following runs will be processed:\n"
 
-    for run in sorted(aag_runs.keys()):
-        message += "Run %s (%s files, %s jobs)\n" % (run, aag_runs[run]["n_files"], aag_runs[run]["n_jobs"])
+    if aag_runs != None:
+    
+        for run in sorted(aag_runs.keys()):
+            message += "Run %s (%s files, %s jobs)\n" % (run, aag_runs[run]["n_files"], aag_runs[run]["n_jobs"])
     
     os.system('echo "%s" | mail -s "CalibTree production status" '
               % message + mail_address)
@@ -110,8 +118,20 @@ def mail(std_runs, aag_runs, mail_address):
 
     
 if __name__ == "__main__":
-    config     = SubmitJobs(use_AAG=False, use_debug=DEBUG)
-    config_AAG = SubmitJobs(use_AAG=True, use_debug=DEBUG)
-
-    if not DRYRUN:
+    if not SKIP_AAG and not SKIP_STD:
+        config     = SubmitJobs(use_AAG=False, use_debug=DEBUG, use_run_list=LIST_OF_RUNS)
+        config_AAG = SubmitJobs(use_AAG=True, use_debug=DEBUG, use_run_list=LIST_OF_RUNS)
+        if DRYRUN: exit()
+        mail(config.launched_runs_dict, None, config.mail_address)
         mail(config.launched_runs_dict, config_AAG.launched_runs_dict, config.mail_address)
+        
+    elif SKIP_AAG:
+        config     = SubmitJobs(use_AAG=False, use_debug=DEBUG, use_run_list=LIST_OF_RUNS)
+        if DRYRUN: exit()
+        mail(config.launched_runs_dict, None, config.mail_address)
+        
+    elif SKIP_STD:
+        config_AAG = SubmitJobs(use_AAG=True, use_debug=DEBUG, use_run_list=LIST_OF_RUNS)
+        if DRYRUN: exit()
+        mail(config.launched_runs_dict, config_AAG.launched_runs_dict, config.mail_address)
+    

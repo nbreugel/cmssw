@@ -6,19 +6,23 @@ from CalibTracker.SiStripCommon.ShallowGainCalibration_cfi import *
 from CalibTracker.SiStripCommon.SiStripBFieldFilter_cfi import *
 
 from HLTrigger.HLTfilters.triggerResultsFilter_cfi import *
+
+# For 2023 HI collisions use "HLT_HIZeroBias_FirstCollisionAfterAbortGap_*"
 AAGFilter = triggerResultsFilter.clone(triggerConditions = cms.vstring("HLT_ZeroBias_FirstCollisionAfterAbortGap_*"),
                                        hltResults = cms.InputTag( "TriggerResults", "", "HLT" ),
                                        l1tResults = cms.InputTag( "" ),
                                        throw = cms.bool(False)
                                        )
 
+# For 2023 HI collisions use "HLT_IsoMu20_*"
 IsolatedMuonFilter = triggerResultsFilter.clone(triggerConditions = cms.vstring("HLT_IsoMu20_*"),
                                                 hltResults = cms.InputTag( "TriggerResults", "", "HLT" ),
                                                 l1tResults = cms.InputTag( "" ),
                                                 throw = cms.bool(False)
                                                 )
 
-ZeroBiasFilter = triggerResultsFilter.clone(triggerConditions = cms.vstring("HLT_ZeroBias_*",),
+# For 2023 HI collisions use cms.vstring("HLT_HIZeroBias_*","HLT_HIMinimumBias*")
+ZeroBiasFilter = triggerResultsFilter.clone(triggerConditions = cms.vstring("HLT_ZeroBias_*"),
                                             hltResults = cms.InputTag( "TriggerResults", "", "HLT" ),
                                             l1tResults = cms.InputTag( "" ),
                                             throw = cms.bool(False)

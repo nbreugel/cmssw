@@ -2,6 +2,7 @@
 import os
 from submitCalibTree.DasWrapper import DasWrapper
 from submitCalibTree.Config import Configuration
+from submitCalibTree.PrintHelpers import printSkipped, printIncluded
 
 class JobSubmitter:
     run_n_events_threshold = 250
@@ -29,24 +30,28 @@ class JobSubmitter:
         for dataset in dataset_list:
             dataset_run_list = self.das_wrapper.getRunsFromDataset(dataset)
             for run in dataset_run_list:
-                if run >= self.config.first_run and run <= self.config.last_run:
-                    print("Checking run " + str(run) + "...")
+                run_meets_condition = run >= self.config.first_run and run <= self.config.last_run
+                if self.config.use_run_list:
+                    run_meets_condition = run in self.config.runs_to_process
+                    
+                if run_meets_condition:
+                    print("Checking run " + str(run) + "... ", end="", flush=True)
                     run_n_events = self.das_wrapper.getNumberOfEvents(dataset, run)
                     if run_n_events < self.run_n_events_threshold:
-                        print("Run %i skipped: Not enough events (%i < %i).\n" % (run,
-                                                                                run_n_events,
-                                                                                self.run_n_events_threshold))
+                        printSkipped()
+                        print("Not enough events (%i events)" % run_n_events)
                     else:
                         run_n_files = self.das_wrapper.getNumberOfFiles(dataset, run)
                         run_info = (run, run_n_events, run_n_files)
                         if run_n_files > 0:
-                            print("Run %i will be processed! (%i events, %i files)\n" % run_info)
+                            printIncluded()
+                            print("%i events, %i files" % (run_n_events, run_n_files))
                             self.distributeJobs(dataset, run, run_n_files)
                             
                             if run > last_run_processed:
                                 last_run_processed = run
                         else:
-                            print("Run %i skipped: No files found. (%s events, %s files)\n" % run_info)
+                            print("No files found. (%s events, %s files)" % (run_n_events, run_n_files))
 
         if self.n_jobs == 0:
             print("---> No runs were found for %s bunch!" % ("STD" if not self.config.use_AAG else "AAG"))
@@ -58,8 +63,20 @@ class JobSubmitter:
         self.generateCondorScript()
         print("Done generating HTCondor submission directory.")
 
+        if self.config.use_run_list:
+            print("")
+            n_runs_run_list = len(self.config.runs_to_process)
+            n_runs_launched = len(self.launched_runs_dict.keys())
+            fraction = n_runs_launched / n_runs_run_list
+            print(f"Out of the {n_runs_run_list} runs supplied, {n_runs_launched} runs will be processed ({100*fraction:.2f}%)")
+            if n_runs_run_list != n_runs_launched:
+                missing_runs = [int(run) for run in self.launched_runs_dict.keys() if int(run) not in self.config.runs_to_process]
+                print("The following runs are missing:")
+                print(missing_runs)
+            
+
         return last_run_processed
-                
+        
     def distributeJobs(self, dataset, run, run_n_files):
         files_to_process = self.das_wrapper.getFilesFromDataset(dataset, run)
         files_in_job = []
@@ -112,7 +129,7 @@ class JobSubmitter:
         print("---> Done!\n")
 
     def launchJobs(self):
-        os.system("condor_submit %s/condor_submission.submit -batch-name CalibTrees%s" % (self.config.condor_dir, "" if not self.config.use_AAG else "_Aag"))
+        os.system("condor_submit -batch-name CalibTrees%s %s/condor_submission.submit" % (self.config.condor_dir, "" if not self.config.use_AAG else "_Aag"))
 
     def generateCondorScript(self):
         with open(self.config.condor_dir + "/condor_submission.submit", "w") as submit:

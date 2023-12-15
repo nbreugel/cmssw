@@ -85,6 +85,8 @@ process.load('CalibTracker.SiStripCommon.ShallowEventDataProducer_cfi') #event I
 
 process.anEff.useAllHitsFromTracksWithMissingHits = cms.untracked.bool(True)
 process.anEff.doMissingHitsRecovery = cms.untracked.bool(True)
+# process.anEff.cutOnTracks = cms.untracked.bool(False)
+
 
 from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, options.conditionGT, options.conditionOverwrite)
@@ -119,12 +121,15 @@ else:
 
 process.options   = cms.untracked.PSet( wantSummary = cms.untracked.bool(True) )
 process.MessageLogger.cerr.FwkReport.reportEvery = 10000
+# process.MessageLogger.cerr.threshold = "DEBUG"
+# process.MessageLogger.debugModules = ["*"]
 
 #definition of input collection
 process.CalibrationTracks.src = cms.InputTag( options.inputCollection )
 process.shallowTracks.Tracks  = cms.InputTag( options.inputCollection )
 #process.shallowGainCalibrationAllBunch   = 'ALCARECOSiStripCalMinBias' #cms.InputTag( options.inputCollection )
 #process.shallowGainCalibrationAllBunch0T = 'ALCARECOSiStripCalMinBias' #cms.InputTag( options.inputCollection )
+#process.Tracer = cms.Service("Tracer")
 
 #Setup prescale
 process.prescaleEvent.prescale = 1

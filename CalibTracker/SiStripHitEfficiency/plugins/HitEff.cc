@@ -81,7 +81,7 @@ HitEff::HitEff(const edm::ParameterSet& conf)
       trajectories_token_(consumes<std::vector<Trajectory> >(conf.getParameter<edm::InputTag>("trajectories"))),
       trajTrackAsso_token_(consumes<TrajTrackAssociationCollection>(conf.getParameter<edm::InputTag>("trajectories"))),
       clusters_token_(
-          consumes<edmNew::DetSetVector<SiStripCluster> >(conf.getParameter<edm::InputTag>("siStripClusters"))),
+		      consumes<edmNew::DetSetVector<SiStripCluster> >(conf.getParameter<edm::InputTag>("siStripClusters"))),
       digisCol_token_(consumes(conf.getParameter<edm::InputTag>("siStripDigis"))),
       digisVec_token_(consumes(conf.getParameter<edm::InputTag>("siStripDigis"))),
       trackerEvent_token_(consumes<MeasurementTrackerEvent>(conf.getParameter<edm::InputTag>("trackerEvent"))),
@@ -107,12 +107,14 @@ HitEff::HitEff(const edm::ParameterSet& conf)
   useAllHitsFromTracksWithMissingHits_ =
       conf_.getUntrackedParameter<bool>("useAllHitsFromTracksWithMissingHits", false);
   doMissingHitsRecovery_ = conf_.getUntrackedParameter<bool>("doMissingHitsRecovery", false);
-
+  cout<<"DEBUG : parameters are:"<<useAllHitsFromTracksWithMissingHits_<<" "<<doMissingHitsRecovery_<<endl;
+  
   hitRecoveryCounters.resize(k_END_OF_LAYERS, 0);
   hitTotalCounters.resize(k_END_OF_LAYERS, 0);
 }
 
 void HitEff::beginJob() {
+  
   edm::Service<TFileService> fs;
   if (compSettings > 0) {
     edm::LogInfo("SiStripHitEfficiency:HitEff") << "the compressions settings are:" << compSettings << std::endl;
@@ -172,9 +174,11 @@ void HitEff::beginJob() {
 
   totalNbHits = 0;
   missHitPerLayer.resize(k_END_OF_LAYERS, 0);
+  LogDebug("SiStripHitEfficiency:HitEff") << "Ending beginJob()" << endl;
 }
 
 void HitEff::analyze(const edm::Event& e, const edm::EventSetup& es) {
+  
   //Retrieve tracker topology from geometry
   const TrackerTopology* tTopo = &es.getData(topoToken_);
   siStripClusterInfo_.initEvent(es);

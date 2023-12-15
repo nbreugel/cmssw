@@ -52,20 +52,28 @@ print("Processing files %i to %i of run %i (%i files total):\n" % (FILE_START, F
 print(FILES_TO_PROCESS.replace(",","\n") + "\n")
 print(cmsrun_command + "\n")
 
-exit_code = os.system(CONFIG.init_env_command + cmsrun_command)
+# (exit_code, output) = subprocess.getstatusoutput(CONFIG.init_env_command + "export XRD_LOGLEVEL=Debug; " + cmsrun_command)
+(exit_code, output) = subprocess.getstatusoutput(CONFIG.init_env_command + cmsrun_command)
+LOCAL_TEST = False
 
 if int(exit_code) != 0:
     print("Job failed with exit code " + str(exit_code))
+    print("Job output:\n")
+    print(output)
     os.system("echo %i %s >> FailedRuns%s.txt" % (RUN, FILES_TO_PROCESS, "_Aag" if USE_AAG else ""))
 else:
     file_size_in_kilobytes = int(os.path.getsize(OUTFILE) * 1e-3)
     if file_size_in_kilobytes > 10:
         print("Preparing for stageout of " + OUTFILE + " on " + CASTOR_DIR + "/" + OUTFILE + ". The file size is %d KB" % file_size_in_kilobytes)
         cp_command =  "eos cp " + OUTFILE
-        # cp_command += " root://eoscms.cern.ch//eos/cms/%s/%s" % (CASTOR_DIR, OUTFILE)
-        cp_command += " root://eosuser.cern.ch//eos/user/n/nbreugel/%s" % (OUTFILE)
-        eos_mgm_command = "export EOS_MGM_URL=root://eosuser.cern.ch;"
-        (stageout_exit_code, output) = subprocess.getstatusoutput(CONFIG.init_env_command + eos_mgm_command + cp_command)
+        
+        if LOCAL_TEST:
+            CONFIG.init_env_command += "export EOS_MGM_URL=root://eosuser.cern.ch;"
+            cp_command += " root://eosuser.cern.ch//eos/user/n/nbreugel/%s" % (OUTFILE)
+        else:
+            cp_command += " root://eoscms.cern.ch//eos/cms/%s/%s" % (CASTOR_DIR, OUTFILE)
+            
+        (stageout_exit_code, output) = subprocess.getstatusoutput(CONFIG.init_env_command + cp_command)
         
         if stageout_exit_code != 0:
             print("STAGE OUT FAILED WITH EXIT CODE " + str(stageout_exit_code))

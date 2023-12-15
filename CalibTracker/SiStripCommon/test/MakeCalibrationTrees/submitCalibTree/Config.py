@@ -6,10 +6,12 @@ import time
 
 class Configuration:
     # Variables to be edited by user:
-    dataset_path         = '/StreamExpress/Run2023F-SiStripCalMinBias__AAG__-Express-v1/ALCARECO'
-    CASTOR_dir           = '/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR18__AAG__'
-    first_run            = 373710 
-    last_run             = 373710
+    # Heavy Ions: '/StreamHIExpress/HIRun2023A-SiStripCalMinBias-Express-v2/ALCARECO'
+    #            (make sure you are using the correct HLT paths, you may need to add some "HI" keywords)
+    dataset_path         = '/StreamExpress/Run2023*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
+    CASTOR_dir           = '/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR23_forMkFit__AAG__'
+    first_run            = 370776  # default -1
+    last_run             = 370776  # default 999999
     collection           = "ALCARECOSiStripCalMinBias__AAG__"
     global_tag           = "130X_dataRun3_Express_v2"
     mail_address          = "nordin.breugelmans@cern.ch"
@@ -30,12 +32,15 @@ class Configuration:
     relaunch_runs_list = []
     launched_runs_list = []
 
-    def __init__(self, use_AAG = False, debug_mode = False):
+    def __init__(self, use_AAG = False, debug_mode = False, use_run_list=""):
         self.use_AAG      = use_AAG
         self.debug_mode   = debug_mode
+        self.use_run_list = use_run_list != ""
+        if self.use_run_list:
+            self.runs_to_process = self.readRunList(use_run_list)
         
         self.CASTOR_dir   = self.CASTOR_dir.replace("__AAG__", "_Aag" if self.use_AAG else "")
-        self.dataset_path = self.dataset_path.replace("__AAG__", "_Aag" if self.use_AAG else "")
+        self.dataset_path = self.dataset_path.replace("__AAG__", "AAG" if self.use_AAG else "")
         self.collection   = self.collection.replace("__AAG__", "AAG" if self.use_AAG else "")
         
         self.integrity    = self.checkIntegrity()
@@ -97,6 +102,12 @@ class Configuration:
             self.printWarning("The global tag was not specified.")
             config_is_good = False
 
+        # If we use a list of runs as input, check if it was loaded correctly:
+        if self.use_run_list:
+            if len(self.runs_to_process) == 0:
+                self.printWarning(f"No runs were found in the given run list file.")
+                config_is_good = False
+
         return config_is_good
 
     def checkProxy(self):
@@ -140,7 +151,22 @@ class Configuration:
     def printDebug(self, message):
         if self.debug_mode:
             print("\033[33m" + "CONFIG DEBUG: " + message + "\033[0m")
-           
+
+    def readRunList(self, path_to_run_list):
+        if not os.path.isfile(path_to_run_list):
+            self.printWarning(f"Could not find file containing runs: {path_to_run_list}")
+            return []
+
+        runs = []
+        with open(path_to_run_list, "r") as runs_file:
+            for line in runs_file.readlines():
+                number = line.replace("\n", "")
+                if number.isdigit():
+                    runs += [int(number)]
+
+        return runs
+                
+        
 
 if __name__ == "__main__":
     c = Configuration(False, True)
