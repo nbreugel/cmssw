@@ -70,7 +70,7 @@ class JobSubmitter:
             fraction = n_runs_launched / n_runs_run_list
             print(f"Out of the {n_runs_run_list} runs supplied, {n_runs_launched} runs will be processed ({100*fraction:.2f}%)")
             if n_runs_run_list != n_runs_launched:
-                missing_runs = [int(run) for run in self.launched_runs_dict.keys() if int(run) not in self.config.runs_to_process]
+                missing_runs = [int(run) for run in self.config.runs_to_process if int(run) not in self.launched_runs_dict.keys()]
                 print("The following runs are missing:")
                 print(missing_runs)
             

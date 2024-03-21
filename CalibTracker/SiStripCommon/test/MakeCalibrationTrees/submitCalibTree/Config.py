@@ -8,12 +8,18 @@ class Configuration:
     # Variables to be edited by user:
     # Heavy Ions: '/StreamHIExpress/HIRun2023A-SiStripCalMinBias-Express-v2/ALCARECO'
     #            (make sure you are using the correct HLT paths, you may need to add some "HI" keywords)
-    dataset_path         = '/StreamExpress/Run2023*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
-    CASTOR_dir           = '/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR23_forMkFit__AAG__'
-    first_run            = 370776  # default -1
-    last_run             = 370776  # default 999999
+    #
+    # 2023: '/StreamExpress/Run2023*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
+    # 2022: '/StreamExpress/Run2022*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
+    # 
+    # global tag 2023 express: "130X_dataRun3_Express_v2"
+    # global tag 2022 express: "124X_dataRun3_Express_v9"
+    dataset_path         = '/StreamExpress/Run2024*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
+    CASTOR_dir           = '/eos/cms/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR24_900GeV__AAG__'
+    first_run            = 378236  # default -1
+    last_run             = 999999  # default 999999
     collection           = "ALCARECOSiStripCalMinBias__AAG__"
-    global_tag           = "130X_dataRun3_Express_v2"
+    global_tag           = "141X_dataRun3_Express_v2"
     mail_address          = "nordin.breugelmans@cern.ch"
 
     # Optional variables:
@@ -78,6 +84,11 @@ class Configuration:
             self.printDebug("CMSSW directory was not found. Directory will be set based on content of CMSSW_BASE variable.")
             if not "CMSSW_BASE" in os.environ:
                 self.printWarning("CMSSW_BASE variable has not been set. Are you in a CMSSW environment?")
+                # Figure out if we are running from CMSSW environment:
+                # cmd = "eval `scram runtime -sh`;"
+                # cmd += "echo $CMSSW_BASE;"
+                # status, output = subprocess.getstatusoutput(cmd)
+                
                 config_is_good = False
             else:
                 self.CMSSW_dir = os.environ["CMSSW_BASE"] + "/src"
