@@ -71,7 +71,7 @@ else:
             CONFIG.init_env_command += "export EOS_MGM_URL=root://eosuser.cern.ch;"
             cp_command += " root://eosuser.cern.ch//eos/user/n/nbreugel/%s" % (OUTFILE)
         else:
-            cp_command += " root://eoscms.cern.ch//eos/cms/%s/%s" % (CASTOR_DIR, OUTFILE)
+            cp_command += " /%s/%s" % (CASTOR_DIR, OUTFILE)
             
         (stageout_exit_code, output) = subprocess.getstatusoutput(CONFIG.init_env_command + cp_command)
         

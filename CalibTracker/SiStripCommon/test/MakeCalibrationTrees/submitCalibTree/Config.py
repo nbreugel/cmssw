@@ -175,7 +175,7 @@ class Configuration:
                 if number.isdigit():
                     runs += [int(number)]
 
-        return runs
+         return runs
                 
         
 
