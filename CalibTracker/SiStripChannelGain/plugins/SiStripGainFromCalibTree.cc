@@ -662,22 +662,6 @@ void SiStripGainFromCalibTree::algoBeginJob(const edm::EventSetup& iSetup) {
   edm::LogInfo("SiStripGainFromCalibTree") << "AlgoMode        : " << AlgoMode << "\n"
                                            << "CalibrationMode : " << m_calibrationMode << "\n"
                                            << "HarvestingMode  : " << m_harvestingMode << std::endl;
-  //Setup DQM histograms
-  if (AlgoMode != "PCL" or m_harvestingMode) {
-    const char* dqm_dir = "AlCaReco/SiStripGainsHarvesting/";
-    this->bookDQMHistos(dqm_dir, dqm_tag_[statCollectionFromMode(m_calibrationMode.c_str())].c_str());
-  } else {
-    //Check consistency of calibration Mode and BField only for the ALCAPROMPT in the PCL workflow
-    if (!isBFieldConsistentWithMode(iSetup)) {
-      string prevMode = m_calibrationMode;
-      swapBFieldMode();
-      edm::LogInfo("SiStripGainFromCalibTree") << "Switching calibration mode for endorsing BField status: " << prevMode
-                                               << " ==> " << m_calibrationMode << std::endl;
-    }
-    std::string dqm_dir = m_DQMdir + ((m_splitDQMstat) ? m_calibrationMode : "") + "/";
-    int elem = statCollectionFromMode(m_calibrationMode.c_str());
-    this->bookDQMHistos(dqm_dir.c_str(), dqm_tag_[elem].c_str());
-  }
 
   tTopo_ = &iSetup.getData(tTopoToken_);
 
@@ -779,6 +763,23 @@ void SiStripGainFromCalibTree::algoBeginJob(const edm::EventSetup& iSetup) {
         }
       }
     }
+  }
+
+    //Setup DQM histograms
+  if (AlgoMode != "PCL" or m_harvestingMode) {
+    const char* dqm_dir = "AlCaReco/SiStripGainsHarvesting/";
+    this->bookDQMHistos(dqm_dir, dqm_tag_[statCollectionFromMode(m_calibrationMode.c_str())].c_str());
+  } else {
+    //Check consistency of calibration Mode and BField only for the ALCAPROMPT in the PCL workflow
+    if (!isBFieldConsistentWithMode(iSetup)) {
+      string prevMode = m_calibrationMode;
+      swapBFieldMode();
+      edm::LogInfo("SiStripGainFromCalibTree") << "Switching calibration mode for endorsing BField status: " << prevMode
+                                               << " ==> " << m_calibrationMode << std::endl;
+    }
+    std::string dqm_dir = m_DQMdir + ((m_splitDQMstat) ? m_calibrationMode : "") + "/";
+    int elem = statCollectionFromMode(m_calibrationMode.c_str());
+    this->bookDQMHistos(dqm_dir.c_str(), dqm_tag_[elem].c_str());
   }
 
   MakeCalibrationMap();
@@ -1027,6 +1028,7 @@ void SiStripGainFromCalibTree::algoEndRun(const edm::Run& run, const edm::EventS
 }
 
 void SiStripGainFromCalibTree::algoEndJob() {
+  std::cout << "Entering algoEndJob..." << std::endl;
   if (AlgoMode == "PCL" && !m_harvestingMode)
     return;  //nothing to do in that case
 
@@ -1132,7 +1134,7 @@ void SiStripGainFromCalibTree::processEvent() {
   int elepos = statCollectionFromMode(m_calibrationMode.c_str());
 
   unsigned int FirstAmplitude = 0;
-  for (unsigned int i = 0; i < (*chargeoverpath).size(); i++) {
+  for (unsigned int i = 0; i < (*charge).size(); i++) {
     FirstAmplitude += (*nstrips)[i];
     int TI = (*trackindex)[i];
 
@@ -1310,7 +1312,7 @@ void SiStripGainFromCalibTree::processEvent() {
 
 void SiStripGainFromCalibTree::algoAnalyzeTheTree() {
   for (unsigned int i = 0; i < VInputFiles.size(); i++) {
-    printf("Openning file %3i/%3i --> %s\n", i + 1, (int)VInputFiles.size(), (char*)(VInputFiles[i].c_str()));
+    printf("Opening file %3i/%3i --> %s\n", i + 1, (int)VInputFiles.size(), (char*)(VInputFiles[i].c_str()));
     fflush(stdout);
     TFile* tfile = TFile::Open(VInputFiles[i].c_str());
     TString tree_path = TString::Format("gainCalibrationTree%s/tree", m_calibrationMode.c_str());
@@ -1318,7 +1320,7 @@ void SiStripGainFromCalibTree::algoAnalyzeTheTree() {
 
     tree->SetBranchAddress((EventPrefix_ + "event" + EventSuffix_).c_str(), &eventnumber, nullptr);
     tree->SetBranchAddress((EventPrefix_ + "run" + EventSuffix_).c_str(), &runnumber, nullptr);
-    tree->SetBranchAddress((EventPrefix_ + "TrigTech" + EventSuffix_).c_str(), &TrigTech, nullptr);
+    // tree->SetBranchAddress((EventPrefix_ + "TrigTech" + EventSuffix_).c_str(), &TrigTech, nullptr);
 
     tree->SetBranchAddress((TrackPrefix_ + "chi2ndof" + TrackSuffix_).c_str(), &trackchi2ndof, nullptr);
     tree->SetBranchAddress((TrackPrefix_ + "momentum" + TrackSuffix_).c_str(), &trackp, nullptr);
@@ -1340,7 +1342,7 @@ void SiStripGainFromCalibTree::algoAnalyzeTheTree() {
     tree->SetBranchAddress((CalibPrefix_ + "farfromedge" + CalibSuffix_).c_str(), &farfromedge, nullptr);
     tree->SetBranchAddress((CalibPrefix_ + "charge" + CalibSuffix_).c_str(), &charge, nullptr);
     tree->SetBranchAddress((CalibPrefix_ + "path" + CalibSuffix_).c_str(), &path, nullptr);
-    tree->SetBranchAddress((CalibPrefix_ + "chargeoverpath" + CalibSuffix_).c_str(), &chargeoverpath, nullptr);
+    // tree->SetBranchAddress((CalibPrefix_ + "chargeoverpath" + CalibSuffix_).c_str(), &chargeoverpath, nullptr);
     tree->SetBranchAddress((CalibPrefix_ + "amplitude" + CalibSuffix_).c_str(), &amplitude, nullptr);
     tree->SetBranchAddress((CalibPrefix_ + "gainused" + CalibSuffix_).c_str(), &gainused, nullptr);
     tree->SetBranchAddress((CalibPrefix_ + "gainusedTick" + CalibSuffix_).c_str(), &gainusedTick, nullptr);
