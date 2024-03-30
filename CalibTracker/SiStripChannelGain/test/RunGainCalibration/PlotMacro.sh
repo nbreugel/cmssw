@@ -10,10 +10,10 @@ if [ $# -ge 5 ]; then arguments=$arguments",$5" ;fi
 if [ $# -ge 6 ]; then arguments=$arguments",$6" ;fi
 if [ $# -ge 1 ]; then arguments=$arguments");" ;fi
 
-# #AutoLibraryLoader::enable();
-# #gSystem->Load("libDataFormatsCommon.so");
-# #gSystem->Load("libDataFormatsHepMCCandidate.so");
-# #gSystem->Load("libDataFormatsFWLite.so");
+# AutoLibraryLoader::enable();
+# gSystem->Load("libDataFormatsCommon.so");
+# gSystem->Load("libDataFormatsHepMCCandidate.so");
+# gSystem->Load("libDataFormatsFWLite.so");
 
 
 root -l -b << EOF
@@ -26,6 +26,9 @@ root -l -b << EOF
   gSystem->Load("libFWCoreFWLite");
   FWLiteEnabler::enable()
   gSystem->Load("libCommonToolsTrackerMap.so");
+  gSystem->Load("libDataFormatsCommon.so");
+  gSystem->Load("libDataFormatsHepMCCandidate.so");
+  gSystem->Load("libDataFormatsFWLite.so");
   .x $executable+$arguments
 EOF
 
