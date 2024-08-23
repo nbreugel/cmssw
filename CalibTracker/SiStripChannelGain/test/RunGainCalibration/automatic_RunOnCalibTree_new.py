@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 
+# Example command:
+# ./automatic_RunOnCalibTree_new.py -f 384203 -l 384322 -m "AagBunch" --pcl
+
 import os
 from argparse import ArgumentParser
 import subprocess
 import json
 import ROOT
 
-PCL_DATASET_PATTERN = "/StreamExpress/Run2024*-PromptCalibProdSiStripGains__AAG__-Express-v*/ALCAPROMPT"
+PCL_DATASET_PATTERN = "/StreamExpress/Run2024G-PromptCalibProdSiStripGains__AAG__-Express-v*/ALCAPROMPT"
 CALIBTREE_PATH_PATTERN = "/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR24_900GeV__AAG__"
 GLOBAL_TAG = "140X_dataRun3_Express_v3"
 
@@ -15,6 +18,8 @@ MIN_N_EVENTS = 3000     # Min. events for run to be accepted for gain payload co
 MAX_N_EVENTS = 3000000  # Max. events for run to be accepted for gain payload computation
 
 DQM_DIR_PATTERN = "AlCaReco/SiStripGains__AAG__"
+
+MINIMAL_FILE_LIST = True
 
 class GainSubmissionFactory:
     def __init__(self, first_run, last_run, publish, mode):
@@ -111,6 +116,15 @@ class GainSubmissionFactory:
                 self.print_error(status, output)
                 return
             file_list = [line for line in output.split("\n") if line != "\n"]
+
+            if MINIMAL_FILE_LIST:
+                file_list = file_list[0:1]
+                self.file_info_text += "\n".join(["calibTreeList.extend(['" + file + "'])" for file in file_list]) + "\n"
+                print(f"[INCLUDED] ONE FILE FROM RUN {run}. That's all.")
+                self.n_events_total = 1
+                self.included_runs = [run]
+                break
+                      
             self.file_info_text += "\n".join(["calibTreeList.extend(['" + file + "'])" for file in file_list]) + "\n"
             print(f"[INCLUDED] {n_events_text} events, cumulative total = {self.n_events_total}")
 
