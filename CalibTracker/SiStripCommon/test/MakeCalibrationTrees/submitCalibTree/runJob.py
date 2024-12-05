@@ -1,90 +1,88 @@
 #!/usr/bin/env python3
-from __future__ import absolute_import
-from __future__ import print_function
+import argparse
 import os
-import sys
 import subprocess
-import time
-import optparse
-from . import Config
-
-usage = 'usage: %prog [options]'
-parser = optparse.OptionParser(usage)
-parser.add_option('-r', '--run'        ,    dest='runNumber'          , help='Run number to process (-1 --> Submit all)', default='-1')
-parser.add_option('-f', '--files'      ,    dest='files'              , help='files to process'                         , default='-1')
-parser.add_option('-n', '--firstFile'  ,    dest='firstFile'          , help='first File to process'                    , default='-1')
-parser.add_option('-a', '--aag'        ,    dest='aag'                , help='Dataset type (is Aag)'                    , default=False, action="store_true")
-parser.add_option('-c', '--corrupted'  ,    dest='corrupted'          , help='Check for corrupted runs'                 , default=False, action="store_true")
-parser.add_option('-d', '--dataset'    ,    dest='dataset'            , help='dataset'                                  , default='')
-parser.add_option('-s', '--stageout'   ,    dest='stageout'           , help='stageout produced files'                  , default="True")
-
-(opt, args) = parser.parse_args()
+from Config import Configuration
 
 
-print("Running calib tree production...")
+parser = argparse.ArgumentParser()
+parser.add_argument("-r", "--run",    help="Run number to process.",     default=-1, type=int)
+parser.add_argument("-f", "--files",  help="Files to process.",          default="")
+parser.add_argument("-a", "--aag",    help="Use AAG dataset.",           default=False, action="store_true")
+parser.add_argument("-n", "--number", help="The Nth batch of files from the run that will be processed by this job.", type=int)
 
-files     = opt.files
-nFiles    = len(files.split(","))-1
-firstFile = int(opt.firstFile)
-checkCorrupted = opt.corrupted
-AAG      = opt.aag
-stageout = (opt.stageout=="True")
-print("After the abort gap : %s"%AAG)
-conf           = Config.configuration(opt.aag)
-run            = int(opt.runNumber)
-dataset        = opt.dataset
-print(conf.checkIntegrity())
-print(conf)
-print(files)
+args = parser.parse_args()
 
-PWDDIR  =os.getcwd() #Current Dir
-print("Running on %s"%PWDDIR)
-os.chdir(conf.RUNDIR);
-if firstFile<0:firstFile=0
+print("Running Calibration Tree production...\n")
 
-print("Processing files %i to %i of run %i" % (firstFile,firstFile+nFiles,run))
+FILES_TO_PROCESS = args.files
+RUN              = args.run
+USE_AAG          = args.aag
+BATCH_NUMBER     = args.number
 
+CONFIG           = Configuration(use_AAG = USE_AAG)
+CASTOR_DIR       = CONFIG.CASTOR_dir
+FILES_PER_JOB    = CONFIG.n_files_per_job
+GLOBAL_TAG       = CONFIG.global_tag
+COLLECTION       = CONFIG.collection
 
-if(firstFile==0):outfile = 'calibTree_%i.root' % (run)
+N_FILES          = len(FILES_TO_PROCESS.split(","))
+FILE_START       = (BATCH_NUMBER - 1) * FILES_PER_JOB + 1
+FILE_END         = FILE_START + N_FILES - 1
+
+PWD              = os.getcwd()
+
+# Follow file formatting from previous CT campaigns (first file has no i)
+if BATCH_NUMBER != 1:
+    suffix_format = "_" + str(BATCH_NUMBER)
 else:
-   outfile = 'calibTree_%i_%i.root' % (run, firstFile)
-#reinitialize the afs token, to make sure that the job isn't kill after a few hours of running
-os.system('/usr/sue/bin/kinit -R')
+    suffix_format = ""
+    
+OUTFILE        = "calibtree_%s%s.root" % (str(RUN),suffix_format)
 
+cmsrun_command =  "cmsRun produceCalibrationTree_template_cfg.py"
+cmsrun_command += " outputFile=" + OUTFILE
+cmsrun_command += " conditionGT=" + GLOBAL_TAG
+cmsrun_command += " inputCollection=" + COLLECTION
+cmsrun_command += " inputFiles=\"%s\"" % FILES_TO_PROCESS
+cmsrun_command += " runNumber=" + str(RUN)
 
-#BUILD CMSSW CONFIG, START CMSRUN, COPY THE OUTPUT AND CLEAN THE PROJECT
-cmd='cmsRun produceCalibrationTree_template_cfg.py'
-cmd+=' outputFile="'+PWDDIR+'/'+outfile+'"'
-cmd+=' conditionGT="'+conf.globalTag+'"'
-cmd+=' inputCollection="'+conf.collection+'"'
-if files[-1]==",":files=files[:-1]
-cmd+=' inputFiles="'+files.replace("'","")+'"'
-cmd+=' runNumber=%s'%run
-print(cmd)
+print(CONFIG)
+print("")
+print("Processing files %i to %i of run %i (%i files total):\n" % (FILE_START, FILE_END, RUN, N_FILES))
+print(FILES_TO_PROCESS.replace(",","\n") + "\n")
+print(cmsrun_command + "\n")
 
-exit_code = os.system(conf.initEnv+cmd)
-stageOutCode = True
-if(int(exit_code)!=0):
-   print("Job Failed with ExitCode "+str(exit_code))
-   os.system('echo %i %i %i >> FailledRun%s.txt' % (run, firstFile, firstFile+nFiles,'_Aag' if AAG else ''))
+# (exit_code, output) = subprocess.getstatusoutput(CONFIG.init_env_command + "export XRD_LOGLEVEL=Debug; " + cmsrun_command)
+(exit_code, output) = subprocess.getstatusoutput(CONFIG.init_env_command + cmsrun_command)
+LOCAL_TEST = False
+
+if int(exit_code) != 0:
+    print("Job failed with exit code " + str(exit_code))
+    print("Job output:\n")
+    print(output)
+    os.system("echo %i %s >> FailedRuns%s.txt" % (RUN, FILES_TO_PROCESS, "_Aag" if USE_AAG else ""))
 else:
-   FileSizeInKBytes = subprocess.getstatusoutput('ls  -lth --block-size=1024 '+PWDDIR+'/'+outfile)[1].split()[4]
-   if(int(FileSizeInKBytes)>10 and stageout):
-      print("Preparing for stageout of " + PWDDIR+'/'+outfile + ' on ' + conf.CASTORDIR+'/'+outfile + '.  The file size is %d KB' % int(FileSizeInKBytes))
-      cpCmd = "eos cp %s/%s "%(PWDDIR,outfile)
-      cpCmd+= "root://eoscms.cern.ch//eos/cms/%s/%s"%(conf.CASTORDIR,outfile)
-      stageOutCode&= not os.system(conf.initEnv+" "+cpCmd)
-      print(conf.eosLs + conf.CASTORDIR+'/'+outfile)
-      stageOutCode&= not os.system("eos ls " + conf.CASTORDIR+'/'+outfile)
-   else:
-      print('File size is %d KB, this is under the threshold --> the file will not be transfered on EOS' % int(FileSizeInKBytes))
-      print("Stageout status = %s"%stageout)
-if not stageOutCode:
-   print("WARNING WARNING WARNING STAGE OUT FAILED BUT NOT RELAUNCHED")
+    file_size_in_kilobytes = int(os.path.getsize(OUTFILE) * 1e-3)
+    if file_size_in_kilobytes > 10:
+        print("Preparing for stageout of " + OUTFILE + " on " + CASTOR_DIR + "/" + OUTFILE + ". The file size is %d KB" % file_size_in_kilobytes)
+        cp_command =  "eos cp " + OUTFILE
+        
+        if LOCAL_TEST:
+            CONFIG.init_env_command += "export EOS_MGM_URL=root://eosuser.cern.ch;"
+            cp_command += " root://eosuser.cern.ch//eos/user/n/nbreugel/%s" % (OUTFILE)
+        else:
+            cp_command += " /%s/%s" % (CASTOR_DIR, OUTFILE)
+            
+        (stageout_exit_code, output) = subprocess.getstatusoutput(CONFIG.init_env_command + cp_command)
+        
+        if stageout_exit_code != 0:
+            print("STAGE OUT FAILED WITH EXIT CODE " + str(stageout_exit_code))
+            print(output)
+            
+        os.system("rm " + OUTFILE)
 
-os.system('ls -lth '+PWDDIR+'/'+outfile)
-if stageout:
-   os.system('rm -f '+PWDDIR+'/'+outfile)
-   os.system('rm -f ConfigFile_'+str(run)+'_'+str(firstFile)+'_cfg.py')
-   os.system('cd ' + conf.RUNDIR)
-   os.system('rm -rf LSFJOB_${LSB_JOBID}')
+if OUTFILE in os.listdir(PWD):
+    os.system("rm " + OUTFILE)
+
+

@@ -1,138 +1,137 @@
 #!/usr/bin/env python3
-from __future__ import print_function
-import urllib
-import string
 import os
 import sys
 import subprocess
 import time
-import optparse
-import submitCalibTree.Config
-import submitCalibTree.launchJobs
+from submitCalibTree.Config import Configuration
+from submitCalibTree.JobSubmitter import JobSubmitter
+import argparse
 
-mailAdd = ""
-start = time.strftime("%D %H:%M")
+parser =argparse.ArgumentParser()
+parser.add_argument("-d", "--dryrun", default=False, action="store_true", help="Dryrun: jobs will not be submitted.")
+parser.add_argument("-v", "--verbose", default=False, action="store_true", help="Verbosity: will print more information in debug mode.")
+parser.add_argument("--skipAAG", default=False, action="store_true", help="Skips running over AAG dataset.")
+parser.add_argument("--skipSTD", default=False, action="store_true", help="Skips running over STD dataset.")
+parser.add_argument("--useRunList", default="", help="Supply file containing list of runs to use.")
 
-def mail(STDruns,AAGruns,cleanUpLog):
-   if mailAdd=="":
-      print("No email address specified.")
-      return
+args = parser.parse_args()
 
-   message  = "Production started at %s\n"%start
-   message += "             ended at %s\n"%time.strftime("%D %H:%M")
-   message += "\n\n\n"
-   message += "Std bunch : processed the following runs :\n"
-   previousRun=0
-   nJobs=1
-   runs = {}
-   for run in STDruns:
-      if not run[0] in runs.keys():
-         runs[run[0]]=1
-      else:
-         runs[run[0]]+=1
+DEBUG        = args.verbose
+DRYRUN       = args.dryrun
+SKIP_AAG     = args.skipAAG
+SKIP_STD     = args.skipSTD
+START_TIME   = time.strftime("%D %H:%M")
+LIST_OF_RUNS = args.useRunList
 
-   runsOrdered = sorted(runs.keys())
+def SubmitJobs(use_AAG = False, use_debug = False, use_run_list=""):
+    print("===> PROCESSING %s BUNCH...\n" % ("STD" if not use_AAG else "AAG"))
+    config = Configuration(debug_mode = use_debug, use_AAG = use_AAG, use_run_list=use_run_list)
 
-   for r in runsOrdered:
-      message+=" Run %s (%s jobs) \n"%(r,runs[r])
-   message +="\n\n"
-   message += "Aag bunch : processed the following runs :\n"
-   runs={}
-   for run in AAGruns:
-      if not run[0] in runs.keys():
-         runs[run[0]]=1
-      else:
-         runs[run[0]]+=1
-   runsOrdered = runs.keys()
-   runsOrdered.sort()
+    LastRun_textfile = "LastRun%s.txt" % ("" if not use_AAG else "_Aag")
+    FailedRun_textfile = "FailedRun%s.txt" % ("" if not use_AAG else "_Aag")
 
-   for r in runsOrdered:
-      message+=" Run %s (%s jobs) \n"%(r,runs[r])
+    if not os.path.isfile(LastRun_textfile):
+        os.system("touch " + LastRun_textfile)
 
-   message+="\n\n **** Cleaning report **** \n\n"
-   message+=cleanUpLog.replace("\"","").replace("'","")
-   os.system('echo "%s" | mail -s "CalibTree production status" '%message + mailAdd)
+    if not os.path.isfile(FailedRun_textfile):
+        os.system("touch " + FailedRun_textfile)
+    
+    if not config.integrity:
+        print("")
+        print("There were some problems with the configuration:")
+        print(config)
+        print("")
+    
+    if config.integrity:
 
-debug = False
-for arg in sys.argv:
-   debug +="debug" in arg.lower()
-if debug:
-   print("DEBUG MODE DETECTED")
-   print("--> Will not submit jobs")
-   print("--> Will not modify status files")
-   print()
+        print("Using the following configuration:")
+        print(config)
+        print("")
 
+        with open(LastRun_textfile, "r") as last_run:
+            for line in last_run:
+                line = line.replace("\n", "").replace("\r", "")
+                if line.isdigit():
+                    config.first_run = int(line)
 
+        with open(FailedRun_textfile, "r") as failed:
+            for line in failed:
+                line = line.split()
+                if len(line) == 1:
+                    if line[0].isdigit() and len(line[0]) == 6:
+                        config.relaunch_list.append(line)
+                    elif len(line) == 3:
+                        if (line[0].isdigit() and line[1].isdigit() and
+                                line[2].isdigit() and len(line[0])) == 6:
+                            config.relaunch_list.append(line)
 
-#Std bunch:
-print("Processing Std bunch")
-config = submitCalibTree.Config.configuration(debug=debug)
-cleanUpMessage = "Unable to clean up folder. Bad clean-up integrity?"
+        if not use_debug:
+            with open(FailedRun_textfile, "w") as failed:
+                failed.write("")
+                
+        condor_submission_handler = JobSubmitter(config)
+        last_run_processed        = condor_submission_handler.generateJobs()
+        config.launched_runs_dict = condor_submission_handler.launched_runs_dict
 
-if config.integrity:
-   print("Cleaning up directory...")
-   cleanUpMessage = subprocess.getstatusoutput("cd %s; python cleanFolders.py; cd -"%config.RUNDIR)[1]
-   print(cleanUpMessage)
-   with open("LastRun.txt","r") as lastRun:
-      for line in lastRun:
-         line = line.replace("\n","").replace("\r","")
-         if line.isdigit():
-            config.firstRun = int(line)
+        if len(config.launched_runs_dict) > 0:
+            if not DRYRUN:
+                condor_submission_handler.launchJobs()
+            else:
+                print("")
+                print("You specified 'dryrun' so the jobs have not been submitted.")
+                print("In order to submit the jobs, use the following command:")
+                print("    condor_submit %s/condor_submission.submit" % config.condor_dir)
+                print("")
+        
+        if not DEBUG:
+            with open(LastRun_textfile, "w") as last_run:
+                last_run.write(str(last_run_processed))
 
-   with open("FailledRun.txt","r") as failled:
-      for line in failled:
-         line = line.split()
-         if len(line)==1:
-            if line[0].isdigit() and len(line[0])==6:
-               config.relaunchList.append(line)
-         elif len(line)==3:
-            if line[0].isdigit() and line[1].isdigit() and line[2].isdigit and len(line[0])==6:
-               config.relaunchList.append(line)
-   if not debug:
-      with open("FailledRun.txt","w") as failled:
-         failled.write("")
+        return config
 
-   lastRunProcessed = submitCalibTree.launchJobs.generateJobs(config)
+def mail(std_runs, aag_runs, mail_address):
 
-   print(config.launchedRuns)
+    if mail_address == "":
+        print("No email address specified.")
+        return
 
-   if not debug:
-      with open("LastRun.txt","w") as lastRun:
-         lastRun.write(str(lastRunProcessed))
+    message  = "Job production started at %s\n" % START_TIME
+    message += "Job production ended at %s\n" % time.strftime("%D %H:%M")
+    message += "\n\n\n"
+    message += "Std bunch: The following runs will be processed:\n"
+    
+    for run in sorted(std_runs.keys()):
+        message += "Run %s (%s files, %s jobs)\n" % (run, std_runs[run]["n_files"], std_runs[run]["n_jobs"])
 
+    message += "\n"
+    message += "AAG bunch: The following runs will be processed:\n"
 
-
-print("Processing AAG")
-
-
-
-configAAG = submitCalibTree.Config.configuration(True,debug=debug)
-if configAAG.integrity:
-   with open("LastRun_Aag.txt","r") as lastRun:
-      for line in lastRun:
-         line = line.replace("\n","").replace("\r","")
-         if line.isdigit():
-            configAAG.firstRun = int(line)
-
-
-   with open("FailledRun_Aag.txt","r") as failled:
-      for line in failled:
-         line = line.split()
-         if len(line)==1:
-            if line[0].isdigit() and len(line[0])==6:
-               configAAG.relaunchList.append(line)
-         elif len(line)==3:
-            if line[0].isdigit() and line[1].isdigit() and line[2].isdigit and len(line[0])==6:
-               configAAG.relaunchList.append(line)
-   if not debug:
-      with open("FailledRun_Aag.txt","w") as failled:
-         failled.write("")
-
-   lastRunProcessed = submitCalibTree.launchJobs.generateJobs(configAAG)
-
-   if not debug:
-      with open("LastRun_Aag.txt","w") as lastRun:
-         lastRun.write(str(lastRunProcessed))
+    if aag_runs != None:
+    
+        for run in sorted(aag_runs.keys()):
+            message += "Run %s (%s files, %s jobs)\n" % (run, aag_runs[run]["n_files"], aag_runs[run]["n_jobs"])
+    
+    os.system('echo "%s" | mail -s "CalibTree production status" '
+              % message + mail_address)
 
 
-mail(config.launchedRuns,configAAG.launchedRuns,cleanUpMessage)
+
+    
+if __name__ == "__main__":
+    if not SKIP_AAG and not SKIP_STD:
+        config     = SubmitJobs(use_AAG=False, use_debug=DEBUG, use_run_list=LIST_OF_RUNS)
+        config_AAG = SubmitJobs(use_AAG=True, use_debug=DEBUG, use_run_list=LIST_OF_RUNS)
+        if DRYRUN: exit()
+        mail(config.launched_runs_dict, None, config.mail_address)
+        mail(config.launched_runs_dict, config_AAG.launched_runs_dict, config.mail_address)
+        
+    elif SKIP_AAG:
+        config     = SubmitJobs(use_AAG=False, use_debug=DEBUG, use_run_list=LIST_OF_RUNS)
+        if DRYRUN: exit()
+        mail(config.launched_runs_dict, None, config.mail_address)
+        
+    elif SKIP_STD:
+        config_AAG = SubmitJobs(use_AAG=True, use_debug=DEBUG, use_run_list=LIST_OF_RUNS)
+        if DRYRUN: exit()
+        mail(config.launched_runs_dict, config_AAG.launched_runs_dict, config.mail_address)
+    
