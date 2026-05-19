@@ -129,7 +129,7 @@ class JobSubmitter:
         print("---> Done!\n")
 
     def launchJobs(self):
-        os.system("condor_submit -batch-name CalibTrees%s %s/condor_submission.submit" % (self.config.condor_dir, "" if not self.config.use_AAG else "_Aag"))
+        os.system("condor_submit -batch-name CalibTrees%s %s/condor_submission.submit" % ("" if not self.config.use_AAG else "_Aag", self.config.condor_dir))
 
     def generateCondorScript(self):
         with open(self.config.condor_dir + "/condor_submission.submit", "w") as submit:

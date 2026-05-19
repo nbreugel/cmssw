@@ -9,19 +9,21 @@ class Configuration:
     # Heavy Ions: '/StreamHIExpress/HIRun2023A-SiStripCalMinBias-Express-v2/ALCARECO'
     #            (make sure you are using the correct HLT paths, you may need to add some "HI" keywords)
     #
+    # 2025: '/StreamExpress/Run2024*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
     # 2024: '/StreamExpress/Run2024*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
     # 2023: '/StreamExpress/Run2023*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
     # 2022: '/StreamExpress/Run2022*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
     #
+    # global tag 2025 express: "150X_dataRun3_Express_v2"
     # global tag 2024 express: "141X_dataRun3_Express_v2"
     # global tag 2023 express: "130X_dataRun3_Express_v2"
     # global tag 2022 express: "124X_dataRun3_Express_v9"
-    dataset_path         = '/StreamExpress/Run2024*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
-    CASTOR_dir           = '/eos/cms/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR24__AAG__'
+    dataset_path         = '/StreamExpress/Run2025*-SiStripCalMinBias__AAG__-Express-v*/ALCARECO'
+    CASTOR_dir           = '/eos/cms/store/group/dpg_tracker_strip/comm_tracker/Strip/Calibration/calibrationtree/GR25_specialruns__AAG__'
     first_run            = 378236  # default -1
     last_run             = 999999  # default 999999
     collection           = "ALCARECOSiStripCalMinBias__AAG__"
-    global_tag           = "141X_dataRun3_Express_v2"
+    global_tag           = "150X_dataRun3_Express_v2"
     mail_address          = "nordin.breugelmans@cern.ch"
 
     # Optional variables:
